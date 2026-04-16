@@ -6,7 +6,7 @@ repeating actioned findings and to detect regressions. Do not delete entries.
 ## Entry format
 
 ```
-## YYYY-MM-DD
+## DD-MM-YYYY
 
 ### Metrics snapshot
 - Conversion rate: X.X% (±X.X% WoW)

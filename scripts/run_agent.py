@@ -17,6 +17,12 @@ from pathlib import Path
 import anthropic
 from dotenv import load_dotenv
 
+
+def fmt_date(d=None) -> str:
+    """Format a date as DD-MM-YYYY. Defaults to today."""
+    d = d or date.today()
+    return d.strftime("%d-%m-%Y")
+
 load_dotenv()
 
 # Ensure scripts/ is importable
@@ -27,6 +33,7 @@ import fetch_analytics
 import analyse_theme
 import score as scorer
 import notify
+import power
 
 REPO_ROOT = Path(__file__).parent.parent
 KNOWLEDGE_DIR = REPO_ROOT / "knowledge"
@@ -40,6 +47,7 @@ REPORTS_ROOT = REPO_ROOT / "reports"
 def read_knowledge_base() -> str:
     files = {
         "CLAUDE.md": REPO_ROOT / "CLAUDE.md",
+        "brand.md": KNOWLEDGE_DIR / "brand.md",
         "hypotheses.md": KNOWLEDGE_DIR / "hypotheses.md",
         "playbook.md": KNOWLEDGE_DIR / "playbook.md",
         "history.md": KNOWLEDGE_DIR / "history.md",
@@ -95,9 +103,46 @@ def build_synthesis_prompt(knowledge: str, all_findings: list[dict], metrics: di
         else "No type filter active — include all experiment types."
     )
 
-    return f"""You are a senior Shopify CRO analyst. Below is your knowledge base, the metrics from this week's scan, and the scored findings from the theme audit and product analysis.
+    # Calculate power analysis if we have session data
+    power_note = ""
+    sessions_total = metrics.get("total_sessions")
+    cvr = metrics.get("conversion_rate")
+    if sessions_total and cvr:
+        weekly_sessions = int(sessions_total / 4.3)  # approx monthly to weekly
+        cvr_pct = float(cvr) * 100 if float(cvr) < 1 else float(cvr)
+        viability = power.assess_test_viability(
+            baseline_cvr=cvr_pct,
+            mde_relative=10,
+            num_variants=2,
+            weekly_sessions=weekly_sessions,
+        )
+        power_note = (
+            f"\n\n# POWER ANALYSIS\n\n"
+            f"- Weekly sessions (est): {weekly_sessions:,}\n"
+            f"- Baseline CVR: {cvr_pct}%\n"
+            f"- For a 10% relative MDE (A/B): {viability['sample_per_variant']:,} sessions/variant, ~{viability['estimated_weeks']} weeks\n"
+            f"- A/B viable in <6 weeks: {'YES' if viability['viable'] else 'NO'}\n"
+        )
+        # Check MVT viability
+        mvt_viability = power.assess_test_viability(
+            baseline_cvr=cvr_pct,
+            mde_relative=10,
+            num_variants=3,
+            weekly_sessions=weekly_sessions,
+        )
+        power_note += (
+            f"- For a 3-way MVT: {mvt_viability['total_sessions_required']:,} total sessions, ~{mvt_viability['estimated_weeks']} weeks\n"
+            f"- 3-way MVT viable in <6 weeks: {'YES' if mvt_viability['viable'] else 'NO'}\n"
+            f"\nUse these numbers when suggesting experiments. Flag any proposal that would take >6 weeks.\n"
+        )
+
+    return f"""You are a senior Shopify CRO analyst. Below is your knowledge base (including brand context, past experiment results, and win rates by experiment type), the metrics from this week's scan, and the scored findings from the theme audit and product analysis.
 
 Produce a weekly CRO report exactly matching the structure defined in CLAUDE.md. Be specific. Cite file:line references. Use raw numbers for metrics. Do not add generic advice not supported by the findings below.
+
+Ground all recommendations in the brand context from brand.md. Consider the industry, customer profile, price positioning, and known friction points when scoring impact and suggesting experiments. If brand.md is empty, note this prominently and flag that recommendations are generic until it's populated.
+
+When suggesting experiments, check the win rate table in insights.md. Boost confidence for experiment types with >60% win rate (3+ decided). Reduce confidence for types with <30% win rate (3+ decided). Note the calibration.
 
 ACTIVE SCOPE: {scope} — restrict all findings, actions, and experiments to this page scope only.
 {filter_block}
@@ -127,6 +172,8 @@ ACTIVE SCOPE: {scope} — restrict all findings, actions, and experiments to thi
 {top_findings_text}
 
 ---
+{power_note}
+---
 
 Now produce the full report in Markdown.
 """
@@ -141,10 +188,24 @@ def synthesise_report(prompt: str, dry_run: bool = False) -> str:
         raise ValueError("ANTHROPIC_API_KEY not set in .env")
 
     client = anthropic.Anthropic(api_key=api_key)
+
+    # Use prompt caching: the knowledge base + instructions are stable across runs,
+    # so mark them as cacheable to reduce latency and cost on repeat runs.
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
+        max_tokens=12000,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+            }
+        ],
     )
     return message.content[0].text
 
@@ -192,7 +253,7 @@ def append_to_history(report_date: str, metrics: dict, top_findings: list[dict])
 
 def run_weekly(dry_run: bool = False, only_types: list[str] = None, scope: str = "pdp") -> None:
     only_types = only_types or []
-    report_date = date.today().isoformat()
+    report_date = fmt_date()
     reports_dir = REPORTS_ROOT / scope
     reports_dir.mkdir(parents=True, exist_ok=True)
     print(f"\n[run_agent] Starting weekly CRO scan — {report_date}")

@@ -34,7 +34,7 @@ After each run, the agent:
 ### Format
 
 ```
-## YYYY-MM-DD
+## DD-MM-YYYY
 
 ### Win rate snapshot
 [table of current win rates]

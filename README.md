@@ -49,7 +49,7 @@ The agents in this system are read-only by design. See [GUARDRAILS.md](GUARDRAIL
 5. Fetches sessions and conversion rate from Shopify GraphQL Analytics API
 6. Scores all findings using ICE framework
 7. Calls Claude API to synthesise a structured report
-8. Commits the report to `reports/YYYY-MM-DD.md` and updates `knowledge/history.md`
+8. Commits the report to `reports/DD-MM-YYYY.md` and updates `knowledge/history.md`
 9. Sends Slack message and/or email digest
 
 ---
@@ -260,7 +260,7 @@ The agents in this system are read-only by design. See [GUARDRAILS.md](GUARDRAIL
 
 ## How it works
 
-1. CRO agent (or you) writes a handoff spec to `dev-agent/handoffs/YYYY-MM-DD-[id].md`
+1. CRO agent (or you) writes a handoff spec to `dev-agent/handoffs/DD-MM-YYYY-[id].md`
    using the template in `dev-agent/handoff-template.md`
 2. Go to **Actions → Implement Experiment (Dev Agent) → Run workflow**
 3. Enter the handoff filename
@@ -275,13 +275,13 @@ change live theme settings. It can only write code and open a pull request.
 
 ```bash
 # Write your handoff spec first
-cp dev-agent/handoff-template.md dev-agent/handoffs/2026-04-16-pdp-17.md
+cp dev-agent/handoff-template.md dev-agent/handoffs/16-04-2026-pdp-17.md
 # Edit it with the experiment details
 
 # Then run Claude Code scoped to the dev agent
 cd shopify-cro-agent
 claude --dangerously-skip-permissions \
-  -p "Read dev-agent/CLAUDE.md for your instructions. Then read dev-agent/handoffs/2026-04-16-pdp-17.md and implement it."
+  -p "Read dev-agent/CLAUDE.md for your instructions. Then read dev-agent/handoffs/16-04-2026-pdp-17.md and implement it."
 ```
 
 ## File structure
@@ -298,7 +298,7 @@ shopify-cro-agent/
 │   ├── history.md               # Auto-updated findings log
 │   └── insights.md              # Strategy pattern analysis and win rates
 ├── reports/
-│   └── YYYY-MM-DD.md            # Weekly reports (committed by agent)
+│   └── DD-MM-YYYY.md            # Weekly reports (committed by agent)
 ├── scripts/
 │   ├── run_agent.py             # Master orchestrator
 │   ├── fetch_shopify.py         # Shopify Admin API fetcher

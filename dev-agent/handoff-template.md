@@ -1,6 +1,6 @@
 # Handoff Spec Template
 
-Copy this file to `dev-agent/handoffs/YYYY-MM-DD-[experiment-id].md` when requesting
+Copy this file to `dev-agent/handoffs/DD-MM-YYYY-[experiment-id].md` when requesting
 implementation of a CRO experiment.
 
 The CRO agent writes these specs. The dev agent reads them.
@@ -9,7 +9,7 @@ The CRO agent writes these specs. The dev agent reads them.
 
 # Handoff: [Experiment ID] — [Experiment Name]
 
-**Date:** YYYY-MM-DD
+**Date:** DD-MM-YYYY
 **Requested by:** CRO agent / owner
 **Status:** pending | in-progress | pr-open | merged | cancelled
 

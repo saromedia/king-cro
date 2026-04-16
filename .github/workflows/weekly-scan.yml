@@ -1,0 +1,105 @@
+name: Weekly CRO Scan
+
+on:
+  schedule:
+    # Monday 8:00 AM AEST = Sunday 10:00 PM UTC
+    - cron: "0 22 * * 0"
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Page scope to analyse"
+        required: false
+        default: "pdp"
+        type: choice
+        options:
+          - pdp
+          - mini-cart
+          - collection
+          - homepage
+          - checkout
+      only:
+        description: "Comma-separated experiment types to focus on (leave empty for all)"
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Simulate without API calls"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  cro-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout CRO agent repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Set up Shopify CLI
+        uses: shopify/shopify-cli-action@v1
+        with:
+          store: ${{ secrets.SHOPIFY_SHOP_URL }}
+          token: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+
+      - name: Pull theme files
+        run: |
+          mkdir -p theme
+          shopify theme pull --store ${{ secrets.SHOPIFY_SHOP_URL }} \
+            --theme ${{ secrets.SHOPIFY_THEME_ID }} \
+            --path theme \
+            --nodelete
+        env:
+          SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+
+      - name: Run CRO scan
+        run: |
+          ARGS="--weekly"
+          if [ "${{ inputs.scope || 'pdp' }}" != "pdp" ]; then
+            ARGS="$ARGS --scope ${{ inputs.scope }}"
+          fi
+          if [ -n "${{ inputs.only }}" ]; then
+            ARGS="$ARGS --only ${{ inputs.only }}"
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          uv run python scripts/run_agent.py $ARGS
+        env:
+          SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
+          SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+          SHOPIFY_API_VERSION: ${{ secrets.SHOPIFY_API_VERSION || '2025-01' }}
+          THEME_DIR: ./theme
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+
+      - name: Commit report and history updates
+        run: |
+          git config user.name "CRO Agent"
+          git config user.email "cro-agent@noreply.github.com"
+          SCOPE="${{ inputs.scope || 'pdp' }}"
+          DATE=$(date +%d-%m-%Y)
+          git add reports/ knowledge/history.md knowledge/insights.md knowledge/experiments.md
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "CRO scan: ${SCOPE} ${DATE}"
+          git push

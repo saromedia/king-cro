@@ -55,11 +55,14 @@ def send_slack(top_findings: list[dict], metrics: dict, report_date: str, dry_ru
         print(json.dumps(payload, indent=2))
         return
 
-    resp = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=10)
-    if resp.status_code == 200:
-        print("[notify] Slack message sent")
-    else:
-        print(f"[notify] Slack error {resp.status_code}: {resp.text}")
+    try:
+        resp = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=10)
+        if resp.status_code == 200:
+            print("[notify] Slack message sent")
+        else:
+            print(f"[notify] Slack error {resp.status_code}: {resp.text}")
+    except Exception as e:
+        print(f"[notify] Slack delivery failed: {e}")
 
 
 def send_email(top_findings: list[dict], metrics: dict, report_date: str, report_md: str, dry_run: bool = False) -> None:
@@ -102,5 +105,5 @@ def send_email(top_findings: list[dict], metrics: dict, report_date: str, report
             server.login(SMTP_USER, SMTP_PASS)
             server.send_message(msg)
         print(f"[notify] Email sent to {NOTIFY_EMAIL}")
-    except Exception as e:
-        print(f"[notify] Email error: {e}")
+    except Exception:
+        print("[notify] Email delivery failed — check SMTP configuration")

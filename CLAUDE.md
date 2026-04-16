@@ -35,12 +35,16 @@ If a finding clearly belongs to a different scope, note it briefly under a
 entirely — it may be useful to file as a hypothesis for that scope later.
 
 ## Knowledge base — read before every run, in this order
-1. `knowledge/hypotheses.md` — owner's CRO theories. Treat as investigation priorities.
-2. `knowledge/playbook.md` — read the section matching the active scope only.
-3. `knowledge/history.md` — past findings for the active scope. Do not repeat actioned
+1. `knowledge/brand.md` — business context, industry, customer profile, competitive
+   landscape, known friction points, past experiment learnings, and A/B testing setup.
+   Read first — this grounds everything else in the specific realities of this business.
+   If brand.md is empty or skeletal, flag it and ask the owner to populate it.
+2. `knowledge/hypotheses.md` — owner's CRO theories. Treat as investigation priorities.
+3. `knowledge/playbook.md` — read the section matching the active scope only.
+4. `knowledge/history.md` — past findings for the active scope. Do not repeat actioned
    findings unless regression detected.
-4. `knowledge/experiments.md` — taxonomy, zone map, and log.
-5. `knowledge/insights.md` — strategy pattern analysis and win rates. Read before writing
+5. `knowledge/experiments.md` — taxonomy, zone map, and log.
+6. `knowledge/insights.md` — strategy pattern analysis and win rates. Read before writing
    the Strategy pulse section of the report.
 
 ## Data sources
@@ -73,12 +77,12 @@ Type disambiguation:
 If an --only filter is also active, apply it on top of the scope filter.
 
 ## What to produce each run
-1. Dated report → reports/SCOPE/YYYY-MM-DD.md
+1. Dated report → reports/SCOPE/DD-MM-YYYY.md
 2. Append summary → knowledge/history.md (tagged with scope)
 3. Append new experiments → knowledge/experiments.md log (tagged with scope)
 4. Slack/email digest via scripts/notify.py
 5. For any experiment requiring theme code changes: write an implementation spec
-   to dev-agent/handoffs/YYYY-MM-DD-[experiment-id].md (only when owner requests it)
+   to dev-agent/handoffs/DD-MM-YYYY-[experiment-id].md (only when owner requests it)
 
 ## Report structure
 
@@ -127,3 +131,70 @@ Score 1–10 on Impact, Confidence, Ease. ICE = average. Sort descending.
 ## Ad-hoc mode
 Without --weekly, focus on whatever the user specified. Same scope and knowledge base.
 You may update any knowledge file if asked.
+
+## Logging experiment results (conversational workflow)
+
+When the owner says they've ended an experiment, finished a test, or wants to log results,
+walk them through this workflow step by step. Do not skip steps.
+
+### Step 1: Identify the experiment
+Ask: "Which experiment? Give me the ID (e.g. PDP-001) or describe it."
+Look up the experiment in experiments.md. If it's not there, create a new entry.
+
+### Step 2: Collect the results
+Ask these questions one at a time:
+
+1. **Outcome**: "Did the variant win, lose, or was it inconclusive?"
+2. **Lift**: "What was the observed lift on the primary metric? (e.g. +12.3% CVR)"
+3. **Confidence**: "What confidence level did AB Convert report? (e.g. 96.2%)"
+4. **Duration**: "When did this test start and end?"
+5. **Sample size**: "How many sessions were in each variant?"
+
+If the owner has an AB Convert CSV export, suggest:
+```
+python scripts/log_result.py --import-ab --id PDP-001 --control control.csv --variant variant.csv
+```
+This will parse the CSV, calculate stats, and log everything automatically.
+
+### Step 3: Categorise and learn
+Ask:
+
+6. **Key learning**: "In one sentence, what did this experiment teach you?"
+7. **Follow-up**: "What's the next move? (implement winner / iterate with a new variant / abandon this angle / new experiment in same zone)"
+8. **Hypothesis link**: "Did this test a specific hypothesis from hypotheses.md?"
+
+### Step 4: Update the knowledge base
+After collecting answers, update these files:
+
+1. **experiments.md** — update the row: status, end date, lift, confidence, notes
+2. **experiments.md zone tracker** — clear the zone if test concluded
+3. **insights.md** — recalculate win rates per type, add dated observation
+4. **hypotheses.md** — if a hypothesis was linked, update its status:
+   - Winner → mark hypothesis `[✓]` confirmed
+   - Loser → mark hypothesis `[✗]` refuted (only if this was the definitive test)
+   - Inconclusive → mark hypothesis `[~]` still under investigation
+5. **history.md** — if this is during a weekly run, include in the report
+
+### Step 5: Strategic recommendation
+After logging, give the owner a brief strategic take:
+
+- How does this result change the win rate for this experiment type?
+- Based on updated win rates, what category should the next experiment come from?
+- Is there a zone that's now free for a new test?
+- Does this result suggest a new hypothesis?
+
+Be opinionated. Use the data in insights.md.
+
+## ICE scoring calibration from results
+
+When suggesting ICE scores for new experiments, the agent must check insights.md win rates:
+
+- If a type has a win rate above 60% (with 3+ decided experiments): boost Confidence by +1
+- If a type has a win rate below 30% (with 3+ decided experiments): reduce Confidence by -1
+- If a type has zero experiments run: note "untested category" and suggest a small first test
+
+This creates a feedback loop: types that keep winning get higher confidence scores,
+making them more likely to be prioritised. Types that keep losing get deprioritised.
+
+The agent should note this calibration in the findings table:
+"[Confidence adjusted +1 based on 75% win rate for social_proof experiments]"

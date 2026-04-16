@@ -2,7 +2,16 @@
 score.py
 Applies ICE scoring heuristics to raw findings.
 Returns findings sorted by ICE score descending.
+
+ICE confidence is calibrated from historical win rates in insights.md:
+- Types with >60% win rate (3+ decided): confidence +1
+- Types with <30% win rate (3+ decided): confidence -1
 """
+
+import re
+from pathlib import Path
+
+INSIGHTS_PATH = Path(__file__).parent.parent / "knowledge" / "insights.md"
 
 # ---------------------------------------------------------------------------
 # Impact heuristics by issue type keyword
@@ -74,21 +83,65 @@ def estimate_ease(suggestion: str) -> int:
     return EASE_MAP["default"]
 
 
+def load_win_rate_calibration() -> dict:
+    """
+    Reads insights.md win rate table and returns a dict of type → adjustment.
+    +1 for types with >60% win rate (3+ decided), -1 for <30%.
+    """
+    calibration = {}
+    try:
+        content = INSIGHTS_PATH.read_text(encoding="utf-8")
+        for line in content.splitlines():
+            if not line.strip().startswith("|") or "---" in line or "Type" in line:
+                continue
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) < 8:
+                continue
+            exp_type = parts[1]
+            try:
+                winners = int(parts[4]) if parts[4].isdigit() else 0
+                losers = int(parts[5]) if parts[5].isdigit() else 0
+            except (ValueError, IndexError):
+                continue
+            decided = winners + losers
+            if decided >= 3:
+                win_rate = winners / decided
+                if win_rate > 0.60:
+                    calibration[exp_type] = +1
+                elif win_rate < 0.30:
+                    calibration[exp_type] = -1
+    except FileNotFoundError:
+        pass
+    return calibration
+
+
 def score_findings(findings: list[dict]) -> list[dict]:
+    calibration = load_win_rate_calibration()
     scored = []
     for f in findings:
         impact = estimate_impact(f.get("issue", ""))
         confidence = estimate_confidence(f.get("severity", "medium"))
         ease = estimate_ease(f.get("suggestion", ""))
+
+        # Apply win rate calibration to confidence
+        exp_type = f.get("experiment_type", "")
+        adjustment = calibration.get(exp_type, 0)
+        if adjustment:
+            confidence = max(1, min(10, confidence + adjustment))
+
         ice = round((impact + confidence + ease) / 3, 1)
 
-        scored.append({
+        entry = {
             **f,
             "ice_impact": impact,
             "ice_confidence": confidence,
             "ice_ease": ease,
             "ice_score": ice,
-        })
+        }
+        if adjustment:
+            entry["ice_calibration"] = f"Confidence {'+' if adjustment > 0 else ''}{adjustment} from {exp_type} win rate"
+
+        scored.append(entry)
 
     scored.sort(key=lambda x: x["ice_score"], reverse=True)
     return scored

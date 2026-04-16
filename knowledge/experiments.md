@@ -59,16 +59,63 @@ uv run python scripts/run_agent.py --weekly  # all types, no filter
 
 ## Experiment log
 
+### ID scheme
+
+Format: `{SCOPE}-{NNN}` — e.g. `PDP-001`, `CART-012`, `COL-003`
+
+Scope prefixes:
+- `PDP` — product detail page
+- `CART` — mini-cart / cart drawer
+- `COL` — collection pages
+- `HOME` — homepage
+- `CHK` — checkout
+- `SITE` — site-wide (cross-scope)
+
+IDs are assigned sequentially within each scope. Never reuse an ID, even if dismissed.
+
 ### Status labels
 - `suggested` — proposed, not yet started
 - `active` — currently running
-- `winner` — ran, improved CVR or AOV
-- `loser` — ran, did not improve
+- `winner` — ran, statistically significant improvement
+- `loser` — ran, no improvement or negative result
+- `inconclusive` — ran, did not reach significance
 - `paused` — started but paused
 - `dismissed` — decided not to run
 
 ### Log
 
-| ID | Scope | Type | Zone | Test mode | Experiment | ICE | Status | Notes |
-|---|---|---|---|---|---|---|---|---|
-| — | — | — | — | — | *(add your experiments here)* | — | — | — |
+| ID | Scope | Type | Zone | Test mode | Experiment | Hypothesis | ICE | Status | Start | End | Lift | Confidence | Tool | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| — | — | — | — | — | *(add experiments here)* | — | — | — | — | — | — | — | — | — |
+
+### Column reference
+
+- **ID**: Unique experiment identifier (see ID scheme above)
+- **Scope**: Which page scope this experiment targets
+- **Type**: Experiment type from taxonomy above
+- **Zone**: Which zone on the page (see zone map above)
+- **Test mode**: `solo` / `concurrent` / `sequential` (see playbook.md)
+- **Experiment**: Short description of what's being tested
+- **Hypothesis**: Link to hypothesis ID in hypotheses.md (e.g. `H-003`) or brief statement
+- **ICE**: Score at time of suggestion (may differ from final impact)
+- **Status**: Current status (see labels above)
+- **Start**: Date test started (DD-MM-YYYY)
+- **End**: Date test concluded (DD-MM-YYYY)
+- **Lift**: Observed lift on primary metric (e.g. `+12.3% CVR`, `-2.1% AOV`)
+- **Confidence**: Statistical confidence level (e.g. `97%`, `< 90%`)
+- **Tool**: Testing tool used (e.g. `AB Convert`, `manual`, `theme toggle`)
+- **Notes**: Context, learnings, follow-up actions
+
+### Active zone tracker
+
+Use this to check which zones have active experiments before suggesting new ones.
+
+| Zone | Active experiment | Status | Started |
+|---|---|---|---|
+| buybox | — | — | — |
+| trust-block | — | — | — |
+| hero-media | — | — | — |
+| value-prop-bar | — | — | — |
+| social-proof-block | — | — | — |
+| content-tabs | — | — | — |
+| sticky-bar | — | — | — |
