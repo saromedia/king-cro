@@ -25,14 +25,23 @@ def base_url(resource: str) -> str:
     return f"https://{SHOP_URL}/admin/api/{API_VERSION}/{resource}.json"
 
 
+MAX_PAGES = 500
+
+
 def paginate(url: str, resource_key: str, params: dict = None) -> list:
     """Follows Shopify cursor-based pagination and returns all records."""
     results = []
     params = params or {}
     params["limit"] = 250
+    page = 0
 
     while url:
-        resp = requests.get(url, headers=HEADERS, params=params)
+        page += 1
+        if page > MAX_PAGES:
+            print(f"[fetch_shopify] WARNING: Pagination hit {MAX_PAGES}-page safety limit for {resource_key}, stopping")
+            break
+
+        resp = requests.get(url, headers=HEADERS, params=params, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         results.extend(data.get(resource_key, []))
