@@ -93,12 +93,17 @@ Open `.env` and fill in:
 | SMTP keys | Your email provider's SMTP settings |
 
 **Shopify API scopes required** (set when creating your custom app):
-- `read_orders`
-- `read_checkouts`
-- `read_products`
-- `read_customers`
-- `read_analytics` — required for sessions and CVR data via GraphQL
-- `read_themes` — required for CI theme pull via Shopify CLI
+
+| Scope | Why the agent needs it |
+|---|---|
+| `read_orders` | AOV, revenue, refund rate, repeat customer rate, discount usage |
+| `read_checkouts` | Abandoned checkout count for cart abandonment rate |
+| `read_products` | Flag thin descriptions, few images, out-of-stock variants |
+| `read_customers` | Identify repeat customers for retention metrics |
+| `read_analytics` | Sessions + CVR via GraphQL — powers the core conversion metrics |
+| `read_themes` | Only needed for GitHub Actions to auto-pull theme files via Shopify CLI |
+
+> **Only grant READ scopes.** The agent is strictly read-only. Do not enable any `write_*` scope — it creates unnecessary risk for zero benefit. See `.env.example` for the full setup walkthrough.
 
 **Finding your theme ID**: Shopify Admin → Online Store → Themes → ⋯ (Actions) → Edit code. The number in the URL is your theme ID.
 
