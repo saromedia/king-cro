@@ -1,0 +1,18 @@
+[project]
+name = "shopify-cro-agent"
+version = "0.1.0"
+description = "Weekly Shopify CRO analysis agent powered by Claude"
+requires-python = ">=3.11"
+
+dependencies = [
+    "anthropic>=0.40.0",
+    "requests>=2.32.0",
+    "python-dotenv>=1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []
