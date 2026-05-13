@@ -65,9 +65,10 @@ def read_knowledge_base() -> str:
 
 
 def build_synthesis_prompt(knowledge: str, all_findings: list[dict], metrics: dict, products: list[dict], **kwargs) -> str:
+    max_findings = kwargs.get("max_findings", 20)
     top_findings_text = "\n".join(
         f"- [ICE {f['ice_score']}] {f['issue']} | {f.get('file','')}{':%d' % f['line'] if f.get('line') else ''} | {f['suggestion']}"
-        for f in all_findings[:20]
+        for f in all_findings[:max_findings]
     )
 
     metrics_text = "\n".join(f"- {k}: {v}" for k, v in metrics.items())
@@ -255,13 +256,17 @@ def append_to_history(report_date: str, metrics: dict, top_findings: list[dict])
 # Main
 # ---------------------------------------------------------------------------
 
-def run_weekly(dry_run: bool = False, only_types: list[str] = None, scope: str = "pdp") -> None:
+def run_weekly(dry_run: bool = False, only_types: list[str] = None, scope: str = "pdp",
+               order_limit: int = 0, max_findings: int = 20) -> None:
     only_types = only_types or []
     report_date = fmt_date()
     reports_dir = REPORTS_ROOT / scope
     reports_dir.mkdir(parents=True, exist_ok=True)
     print(f"\n[run_agent] Starting weekly CRO scan — {report_date}")
     print(f"[run_agent] Scope: {scope} | Dry run: {dry_run}")
+    if order_limit:
+        print(f"[run_agent] Order limit: {order_limit}")
+    print(f"[run_agent] Max findings for synthesis: {max_findings}")
     if only_types:
         print(f"[run_agent] Filter: --only {', '.join(only_types)}\n")
     else:
@@ -272,7 +277,7 @@ def run_weekly(dry_run: bool = False, only_types: list[str] = None, scope: str =
     knowledge = read_knowledge_base()
 
     # 2. Fetch Shopify data
-    shopify_data = fetch_shopify.fetch_all(dry_run=dry_run)
+    shopify_data = fetch_shopify.fetch_all(dry_run=dry_run, order_limit=order_limit)
     metrics = shopify_data["metrics"]
     products = shopify_data["products"]
 
@@ -307,7 +312,7 @@ def run_weekly(dry_run: bool = False, only_types: list[str] = None, scope: str =
 
     # 6. Synthesise report via Claude API
     print("[run_agent] Synthesising report...")
-    prompt = build_synthesis_prompt(knowledge, all_findings, metrics, products, analytics=analytics_data, only_types=only_types, scope=scope)
+    prompt = build_synthesis_prompt(knowledge, all_findings, metrics, products, analytics=analytics_data, only_types=only_types, scope=scope, max_findings=max_findings)
     report_md = synthesise_report(prompt, dry_run=dry_run)
 
     # 7. Write report
@@ -345,12 +350,29 @@ if __name__ == "__main__":
              "Valid types: content, pricing, offer, ux, visual, value_prop, social_proof, "
              "merchandising, marketing_angle, email, technical",
     )
+    parser.add_argument(
+        "--orders",
+        type=int,
+        default=0,
+        help="Max orders to fetch from Shopify. 0 = no limit (all orders in 30-day window). "
+             "Overrides ORDER_LIMIT env var. See .env.example for plan-based defaults.",
+    )
+    parser.add_argument(
+        "--max-findings",
+        type=int,
+        default=0,
+        help="Max findings to include in the Claude synthesis prompt. "
+             "Lower = fewer AI tokens. Default: 20. Overrides MAX_FINDINGS env var.",
+    )
     args = parser.parse_args()
 
     only_types = [t.strip().lower() for t in args.only.split(",") if t.strip()] if args.only else []
+    order_limit = args.orders or int(os.getenv("ORDER_LIMIT", "0"))
+    max_findings = args.max_findings or int(os.getenv("MAX_FINDINGS", "20"))
 
     if args.weekly or args.dry_run:
-        run_weekly(dry_run=args.dry_run, only_types=only_types, scope=args.scope)
+        run_weekly(dry_run=args.dry_run, only_types=only_types, scope=args.scope,
+                   order_limit=order_limit, max_findings=max_findings)
     else:
         print("Ad-hoc mode: open this project in Claude Code and run your prompt.")
         print("The agent will read the knowledge base and focus on what you specify.")
@@ -358,3 +380,5 @@ if __name__ == "__main__":
         print("For dry run:            python scripts/run_agent.py --weekly --dry-run")
         print("For focused scan:       python scripts/run_agent.py --weekly --only pricing,offer")
         print("For different scope:    python scripts/run_agent.py --weekly --scope mini-cart")
+        print("With order limit:       python scripts/run_agent.py --weekly --orders 250")
+        print("With findings cap:      python scripts/run_agent.py --weekly --max-findings 10")

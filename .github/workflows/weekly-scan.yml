@@ -27,6 +27,16 @@ on:
         required: false
         default: false
         type: boolean
+      orders:
+        description: "Max orders to fetch (0 = no limit). See .env.example for plan-based defaults."
+        required: false
+        default: "0"
+        type: string
+      max_findings:
+        description: "Max findings sent to Claude for synthesis (default: 20). Lower = fewer AI tokens."
+        required: false
+        default: "20"
+        type: string
 
 permissions:
   contents: write
@@ -78,6 +88,12 @@ jobs:
           fi
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             ARGS="$ARGS --dry-run"
+          fi
+          if [ "${{ inputs.orders }}" != "0" ] && [ -n "${{ inputs.orders }}" ]; then
+            ARGS="$ARGS --orders ${{ inputs.orders }}"
+          fi
+          if [ "${{ inputs.max_findings }}" != "20" ] && [ -n "${{ inputs.max_findings }}" ]; then
+            ARGS="$ARGS --max-findings ${{ inputs.max_findings }}"
           fi
           uv run python scripts/run_agent.py $ARGS
         env:
