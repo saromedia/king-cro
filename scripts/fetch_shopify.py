@@ -5,7 +5,9 @@ from the Shopify Admin API. Returns structured dicts.
 """
 
 import os
+import re
 import requests
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
@@ -90,8 +92,6 @@ def fetch_products() -> list[dict]:
     products = []
     for p in raw:
         desc = p.get("body_html") or ""
-        # Strip basic HTML tags for word count
-        import re
         clean = re.sub(r"<[^>]+>", " ", desc)
         words = len(clean.split())
         products.append({
@@ -140,7 +140,6 @@ def compute_metrics(orders: list[dict], abandoned: list[dict]) -> dict:
     refund_rate = len(refunded_orders) / total_orders if total_orders else 0
 
     # Repeat customers: customers with more than 1 order in dataset
-    from collections import Counter
     customer_ids = [o["customer"]["id"] for o in orders if o.get("customer")]
     customer_order_counts = Counter(customer_ids)
     repeat_customers = sum(1 for count in customer_order_counts.values() if count > 1)

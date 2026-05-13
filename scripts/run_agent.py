@@ -108,7 +108,11 @@ def build_synthesis_prompt(knowledge: str, all_findings: list[dict], metrics: di
     sessions_total = metrics.get("total_sessions")
     cvr = metrics.get("conversion_rate")
     if sessions_total and cvr:
-        weekly_sessions = int(sessions_total / 4.3)  # approx monthly to weekly
+        # Use actual daily session data if available, otherwise approximate
+        period_days = 30
+        if analytics and analytics.get("sessions", {}).get("period_days"):
+            period_days = analytics["sessions"]["period_days"]
+        weekly_sessions = int(sessions_total / period_days * 7)
         cvr_pct = float(cvr) * 100 if float(cvr) < 1 else float(cvr)
         viability = power.assess_test_viability(
             baseline_cvr=cvr_pct,
@@ -306,16 +310,16 @@ def run_weekly(dry_run: bool = False, only_types: list[str] = None, scope: str =
     prompt = build_synthesis_prompt(knowledge, all_findings, metrics, products, analytics=analytics_data, only_types=only_types, scope=scope)
     report_md = synthesise_report(prompt, dry_run=dry_run)
 
-    # 6. Write report
+    # 7. Write report
     report_path = reports_dir / f"{report_date}.md"
     report_path.write_text(report_md, encoding="utf-8")
     print(f"[run_agent] Report written to {report_path}")
 
-    # 7. Append to history
+    # 8. Append to history
     if not dry_run:
         append_to_history(report_date, metrics, all_findings)
 
-    # 8. Notify
+    # 9. Notify
     notify.send_slack(all_findings[:5], metrics, report_date, dry_run=dry_run)
     notify.send_email(all_findings[:5], metrics, report_date, report_md, dry_run=dry_run)
 
@@ -338,7 +342,7 @@ if __name__ == "__main__":
         default="",
         help="Comma-separated experiment types to focus on. "
              "e.g. --only pricing,offer  or  --only ux,content,social_proof\n"
-             "Valid types: content, pricing, offer, ux, social_proof, "
+             "Valid types: content, pricing, offer, ux, visual, value_prop, social_proof, "
              "merchandising, marketing_angle, email, technical",
     )
     args = parser.parse_args()

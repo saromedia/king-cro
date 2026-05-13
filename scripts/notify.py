@@ -151,5 +151,5 @@ def send_email(top_findings: list[dict], metrics: dict, report_date: str, report
             server.login(SMTP_USER, SMTP_PASS)
             server.send_message(msg)
         print(f"[notify] Email sent to {NOTIFY_EMAIL}")
-    except Exception:
-        print("[notify] Email delivery failed — check SMTP configuration")
+    except Exception as e:
+        print(f"[notify] Email delivery failed: {e}")

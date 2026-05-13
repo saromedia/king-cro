@@ -25,8 +25,8 @@ THEME_DIR = os.getenv("THEME_DIR", "")
 
 SCOPE_FILE_PATTERNS = {
     "pdp": [
-        r"product",          # sections/product-template.liquid, snippets/product-form.liquid, etc.
-        r"main-product",
+        r"(?:^|/)(?:main-)?product(?:-template|-form|-price|-media|-info|-variant)?\.liquid$",
+        r"(?:^|/)product[_-]",
     ],
     "mini-cart": [
         r"cart-drawer",
@@ -36,14 +36,14 @@ SCOPE_FILE_PATTERNS = {
         r"cart-template",
     ],
     "collection": [
-        r"collection",
+        r"(?:^|/)(?:main-)?collection(?:-template)?\.liquid$",
         r"product-card",
         r"product-grid",
     ],
     "homepage": [
-        r"index",
-        r"hero",
-        r"slideshow",
+        r"(?:^|/)index\.",
+        r"(?:^|/)hero",
+        r"(?:^|/)slideshow",
         r"featured-collection",
         r"featured-products",
     ],
