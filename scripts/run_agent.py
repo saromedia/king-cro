@@ -17,12 +17,6 @@ from pathlib import Path
 import anthropic
 from dotenv import load_dotenv
 
-
-def fmt_date(d=None) -> str:
-    """Format a date as DD-MM-YYYY. Defaults to today."""
-    d = d or date.today()
-    return d.strftime("%d-%m-%Y")
-
 load_dotenv()
 
 # Ensure scripts/ is importable
@@ -34,6 +28,7 @@ import analyse_theme
 import score as scorer
 import notify
 import power
+from utils import fmt_date
 
 REPO_ROOT = Path(__file__).parent.parent
 KNOWLEDGE_DIR = REPO_ROOT / "knowledge"
@@ -64,7 +59,23 @@ def read_knowledge_base() -> str:
     return "\n\n---\n\n".join(sections)
 
 
-def build_synthesis_prompt(knowledge: str, all_findings: list[dict], metrics: dict, products: list[dict], **kwargs) -> str:
+def build_synthesis_prompt(
+    knowledge: str,
+    all_findings: list[dict],
+    metrics: dict,
+    products: list[dict],
+    **kwargs,
+) -> tuple[str, str]:
+    """
+    Builds the synthesis prompt as two parts:
+      stable_prefix — instructions + scope/filter framing + knowledge base.
+                      This is the prompt-cache prefix; identical across most runs.
+      volatile_body — this week's metrics, product summary, scored findings,
+                      power analysis. Changes every run.
+
+    Returning them separately lets `synthesise_report` apply cache_control to the
+    stable prefix only — otherwise per-run data busts the cache every call.
+    """
     max_findings = kwargs.get("max_findings", 20)
     top_findings_text = "\n".join(
         f"- [ICE {f['ice_score']}] {f['issue']} | {f.get('file','')}{':%d' % f['line'] if f.get('line') else ''} | {f['suggestion']}"
@@ -141,9 +152,9 @@ def build_synthesis_prompt(knowledge: str, all_findings: list[dict], metrics: di
             f"\nUse these numbers when suggesting experiments. Flag any proposal that would take >6 weeks.\n"
         )
 
-    return f"""You are a senior Shopify CRO analyst. Below is your knowledge base (including brand context, past experiment results, and win rates by experiment type), the metrics from this week's scan, and the scored findings from the theme audit and product analysis.
+    stable_prefix = f"""You are a senior Shopify CRO analyst. Below is your knowledge base (including brand context, past experiment results, and win rates by experiment type). The metrics from this week's scan and the scored findings from the theme audit will follow in a separate message section.
 
-Produce a weekly CRO report exactly matching the structure defined in CLAUDE.md. Be specific. Cite file:line references. Use raw numbers for metrics. Do not add generic advice not supported by the findings below.
+Produce a weekly CRO report exactly matching the structure defined in CLAUDE.md. Be specific. Cite file:line references. Use raw numbers for metrics. Do not add generic advice not supported by the findings provided.
 
 Ground all recommendations in the brand context from brand.md. Consider the industry, customer profile, price positioning, and known friction points when scoring impact and suggesting experiments. If brand.md is empty, note this prominently and flag that recommendations are generic until it's populated.
 
@@ -157,8 +168,9 @@ ACTIVE SCOPE: {scope} — restrict all findings, actions, and experiments to thi
 # KNOWLEDGE BASE
 
 {knowledge}
+"""
 
----
+    volatile_body = f"""---
 
 # THIS WEEK'S METRICS
 
@@ -172,7 +184,7 @@ ACTIVE SCOPE: {scope} — restrict all findings, actions, and experiments to thi
 
 ---
 
-# SCORED FINDINGS (top 20, sorted by ICE score)
+# SCORED FINDINGS (top {max_findings}, sorted by ICE score)
 
 {top_findings_text}
 
@@ -183,8 +195,10 @@ ACTIVE SCOPE: {scope} — restrict all findings, actions, and experiments to thi
 Now produce the full report in Markdown.
 """
 
+    return stable_prefix, volatile_body
 
-def synthesise_report(prompt: str, dry_run: bool = False) -> str:
+
+def synthesise_report(stable_prefix: str, volatile_body: str, dry_run: bool = False) -> str:
     if dry_run:
         return f"# DRY RUN REPORT — {date.today()}\n\nThis is a simulated report. No Claude API call was made.\n"
 
@@ -194,8 +208,10 @@ def synthesise_report(prompt: str, dry_run: bool = False) -> str:
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    # Use prompt caching: the knowledge base + instructions are stable across runs,
-    # so mark them as cacheable to reduce latency and cost on repeat runs.
+    # Anthropic prompt caching caches everything up to and including the block
+    # marked with cache_control. Putting cache_control on the stable prefix block
+    # (instructions + knowledge base) and leaving the volatile body unmarked means
+    # the per-run metrics/findings can change without busting the cached prefix.
     message = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=12000,
@@ -205,9 +221,13 @@ def synthesise_report(prompt: str, dry_run: bool = False) -> str:
                 "content": [
                     {
                         "type": "text",
-                        "text": prompt,
+                        "text": stable_prefix,
                         "cache_control": {"type": "ephemeral"},
-                    }
+                    },
+                    {
+                        "type": "text",
+                        "text": volatile_body,
+                    },
                 ],
             }
         ],
@@ -305,6 +325,7 @@ def run_weekly(dry_run: bool = False, only_types: list[str] = None, scope: str =
             "issue": device_data["gap_note"],
             "suggestion": "Audit mobile product and cart UX. Run on a real device. Check button sizes, tap targets, and checkout flow.",
             "severity": "high",
+            "experiment_type": "ux",
         })
     raw_findings = theme_findings + product_findings + metric_findings
     all_findings = scorer.score_findings(raw_findings)
@@ -312,8 +333,12 @@ def run_weekly(dry_run: bool = False, only_types: list[str] = None, scope: str =
 
     # 6. Synthesise report via Claude API
     print("[run_agent] Synthesising report...")
-    prompt = build_synthesis_prompt(knowledge, all_findings, metrics, products, analytics=analytics_data, only_types=only_types, scope=scope, max_findings=max_findings)
-    report_md = synthesise_report(prompt, dry_run=dry_run)
+    stable_prefix, volatile_body = build_synthesis_prompt(
+        knowledge, all_findings, metrics, products,
+        analytics=analytics_data, only_types=only_types, scope=scope,
+        max_findings=max_findings,
+    )
+    report_md = synthesise_report(stable_prefix, volatile_body, dry_run=dry_run)
 
     # 7. Write report
     report_path = reports_dir / f"{report_date}.md"

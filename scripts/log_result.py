@@ -41,19 +41,14 @@ import math
 import os
 import re
 import sys
-from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-
-def fmt_date(d=None) -> str:
-    """Format a date as DD-MM-YYYY. Defaults to today."""
-    d = d or date.today()
-    return d.strftime("%d-%m-%Y")
-
+sys.path.insert(0, str(Path(__file__).parent))
+from utils import fmt_date
 
 REPO_ROOT = Path(__file__).parent.parent
 KNOWLEDGE_DIR = REPO_ROOT / "knowledge"
@@ -409,21 +404,41 @@ def update_insights(experiment_id: str, exp_type: str, status: str,
     Recalculates win rates in insights.md based on the full experiments.md log.
     Appends a dated observation entry.
     """
-    # Read experiments.md and count outcomes per type
+    # Read experiments.md and count outcomes per type.
+    # Use a header-derived column map so reordering columns in experiments.md
+    # cannot silently produce wrong win rates.
     content = EXPERIMENTS_PATH.read_text(encoding="utf-8")
     type_stats = {}
+    col_map: dict[str, int] = {}
 
     for line in content.splitlines():
         if not line.strip().startswith("|") or "---" in line:
             continue
         parts = [p.strip() for p in line.split("|")]
-        if len(parts) < 10 or parts[1] == "ID" or parts[1] == "—":
+
+        # The header row defines column positions. Cache it the first time we see it.
+        if not col_map:
+            if "ID" in parts and "Type" in parts and "Status" in parts:
+                col_map = {name: idx for idx, name in enumerate(parts) if name}
+                continue
+            # Skip any pre-header noise (zone tracker tables etc.)
             continue
 
-        row_type = parts[3].strip() if len(parts) > 3 else ""
-        row_status = parts[9].strip() if len(parts) > 9 else ""
+        id_idx = col_map.get("ID")
+        type_idx = col_map.get("Type")
+        status_idx = col_map.get("Status")
+        if id_idx is None or type_idx is None or status_idx is None:
+            continue
+        if len(parts) <= max(id_idx, type_idx, status_idx):
+            continue
 
-        if not row_type or row_type == "Type":
+        row_id = parts[id_idx]
+        if not row_id or row_id == "—":
+            continue
+        row_type = parts[type_idx]
+        row_status = parts[status_idx]
+
+        if not row_type:
             continue
 
         if row_type not in type_stats:
