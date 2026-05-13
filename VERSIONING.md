@@ -74,9 +74,10 @@ If you are a client running this in your GitHub org:
 4. **Don't edit `scripts/*.py` unless you intend to maintain a fork.**
    Customisation belongs in `knowledge/`, `.env`, and GitHub Secrets. Code
    edits make upstream merges painful.
-5. **Keep `knowledge/history.md` archived periodically.** As history grows
-   past ~50k tokens it starts eating into the per-run cost (see
-   [COSTS.md](COSTS.md)). Archive the previous year to
+5. **Keep `knowledge/history.md` archived periodically.** Every weekly run
+   sends the full history to Claude as part of the cached knowledge-base
+   prefix, so as history grows past ~50k tokens it starts measurably
+   increasing the per-run token count. Archive the previous year to
    `knowledge/history-archive-YYYY.md` and prune.
 
 ---
