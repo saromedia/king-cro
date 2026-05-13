@@ -349,9 +349,11 @@ def update_experiments_log(experiment_id: str, status: str, lift: str,
         old_line = None
         new_lines = []
         for line in content.splitlines():
-            if experiment_id in line and line.strip().startswith("|"):
+            # Only match rows where the experiment ID is in the ID column (first cell)
+            cells = [p.strip() for p in line.split("|")] if line.strip().startswith("|") else []
+            if cells and len(cells) >= 2 and cells[1] == experiment_id:
                 old_line = line
-                parts = [p.strip() for p in line.split("|")]
+                parts = cells
                 # Expected: empty, ID, Scope, Type, Zone, TestMode, Experiment, Hypothesis, ICE, Status, Start, End, Lift, Confidence, Tool, Notes, empty
                 if len(parts) >= 16:
                     parts[9] = f" {status} "
@@ -559,9 +561,16 @@ def update_hypothesis(hypothesis_id: str, status: str, experiment_id: str) -> No
     for i, line in enumerate(lines):
         new_lines.append(line)
         if hypothesis_id in line and line.strip().startswith("- ["):
-            # Check if there's already an experiment reference
-            if i + 1 < len(lines) and "Tested by:" not in lines[i + 1]:
-                new_lines.append(f"  Tested by: {experiment_id} ({status}, {fmt_date()})")
+            # Append experiment reference after any existing "Tested by:" lines
+            ref_line = f"  Tested by: {experiment_id} ({status}, {fmt_date()})"
+            # Skip past existing "Tested by:" lines to find insertion point
+            j = i + 1
+            while j < len(lines) and lines[j].strip().startswith("Tested by:"):
+                j += 1
+            # Only add if this experiment isn't already recorded
+            existing_refs = [lines[k] for k in range(i + 1, j)]
+            if not any(experiment_id in ref for ref in existing_refs):
+                new_lines.append(ref_line)
 
     HYPOTHESES_PATH.write_text("\n".join(new_lines), encoding="utf-8")
     print(f"[log_result] Updated hypothesis '{hypothesis_id}' — {status}")
@@ -750,6 +759,9 @@ def run_ab_import(args) -> None:
         override = input("Override status (winner/loser/inconclusive) or 'cancel': ").strip().lower()
         if override == "cancel":
             print("[log_result] Cancelled.")
+            return
+        if override not in VALID_STATUSES:
+            print(f"[log_result] ERROR: Invalid status '{override}'. Must be one of: {', '.join(sorted(VALID_STATUSES))}")
             return
         overall_status = override
 

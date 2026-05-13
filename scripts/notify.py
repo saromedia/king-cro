@@ -23,7 +23,11 @@ SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
 SLACK_DM_USER_ID = os.getenv("SLACK_DM_USER_ID", "")
 SMTP_HOST = os.getenv("SMTP_HOST", "")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+try:
+    SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+except (ValueError, TypeError):
+    print("[notify] WARNING: SMTP_PORT is not a valid integer, defaulting to 587")
+    SMTP_PORT = 587
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASS = os.getenv("SMTP_PASS", "")
 NOTIFY_EMAIL = os.getenv("NOTIFY_EMAIL", "")

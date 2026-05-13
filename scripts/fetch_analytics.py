@@ -200,18 +200,21 @@ def fetch_device_breakdown(days: int = 30) -> dict:
     result = {"breakdown": breakdown, "gap_flagged": False, "gap_note": None}
     try:
         device_map = {row.get("device_type", "").lower(): row for row in breakdown}
-        mobile_cvr = float(device_map.get("mobile", {}).get("conversion_rate", 0) or 0)
-        desktop_cvr = float(device_map.get("desktop", {}).get("conversion_rate", 1) or 1)
-        if desktop_cvr > 0:
-            gap_pct = (desktop_cvr - mobile_cvr) / desktop_cvr
-            if gap_pct > 0.30:
-                result["gap_flagged"] = True
-                result["gap_note"] = (
-                    f"Mobile CVR ({mobile_cvr:.1%}) is {gap_pct:.0%} below "
-                    f"desktop CVR ({desktop_cvr:.1%}) — exceeds 30% threshold"
-                )
-    except Exception:
-        pass
+        mobile_row = device_map.get("mobile")
+        desktop_row = device_map.get("desktop")
+        if mobile_row and desktop_row:
+            mobile_cvr = float(mobile_row.get("conversion_rate", 0) or 0)
+            desktop_cvr = float(desktop_row.get("conversion_rate", 0) or 0)
+            if desktop_cvr > 0:
+                gap_pct = (desktop_cvr - mobile_cvr) / desktop_cvr
+                if gap_pct > 0.30:
+                    result["gap_flagged"] = True
+                    result["gap_note"] = (
+                        f"Mobile CVR ({mobile_cvr:.1%}) is {gap_pct:.0%} below "
+                        f"desktop CVR ({desktop_cvr:.1%}) — exceeds 30% threshold"
+                    )
+    except Exception as e:
+        print(f"[fetch_analytics] WARNING: Device gap calculation failed: {e}")
 
     return result
 
