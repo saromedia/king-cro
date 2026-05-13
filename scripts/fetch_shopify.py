@@ -60,14 +60,17 @@ def paginate(url: str, resource_key: str, params: dict = None) -> list:
     return results
 
 
-def fetch_orders(days: int = 30) -> list[dict]:
-    """Returns orders from the last `days` days."""
+def fetch_orders(days: int = 30, limit: int = 0) -> list[dict]:
+    """Returns orders from the last `days` days, up to `limit` (0 = no limit)."""
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     orders = paginate(
         base_url("orders"),
         "orders",
         {"status": "any", "created_at_min": since, "fields": "id,created_at,total_price,subtotal_price,financial_status,fulfillment_status,line_items,customer,discount_codes,refunds"},
     )
+    if limit > 0 and len(orders) > limit:
+        print(f"[fetch_shopify] Limiting from {len(orders)} to {limit} orders (ORDER_LIMIT)")
+        orders = orders[:limit]
     return orders
 
 
@@ -165,7 +168,7 @@ def compute_metrics(orders: list[dict], abandoned: list[dict]) -> dict:
     }
 
 
-def fetch_all(dry_run: bool = False) -> dict:
+def fetch_all(dry_run: bool = False, order_limit: int = 0) -> dict:
     """Main entry point. Returns all fetched data."""
     if dry_run:
         print("[fetch_shopify] DRY RUN — skipping API calls")
@@ -177,7 +180,7 @@ def fetch_all(dry_run: bool = False) -> dict:
         }
 
     print("[fetch_shopify] Fetching orders...")
-    orders = fetch_orders()
+    orders = fetch_orders(limit=order_limit)
     print(f"[fetch_shopify] {len(orders)} orders fetched")
 
     print("[fetch_shopify] Fetching abandoned checkouts...")
