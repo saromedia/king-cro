@@ -404,6 +404,89 @@ conversational version.
 
 ---
 
+## Step 14 — Pin to a release tag and stay current
+
+This repo is meant to be cloned per client (see [VERSIONING.md](VERSIONING.md)
+for the why). Once you have it working you'll want to (a) stop tracking the
+moving `king` branch and pin to a stable release tag, and (b) periodically pull
+upstream fixes without losing your local config and reports.
+
+### 14a — Pin to a release tag
+
+**Do:** check what release you cloned from, and pin to a tag rather than the
+moving `king` head. From the repo root:
+
+```bash
+# List the available release tags
+git ls-remote --tags origin | awk -F/ '{print $NF}' | grep -v '\^{}$' | sort -V
+
+# Pin to a specific tag (replace v0.1.0 with the latest you want)
+git fetch origin --tags
+git checkout v0.1.0
+git switch -c king-v0.1.0  # create a local branch off the tag
+```
+
+**Why:** the `king` branch moves forward as the upstream maintainer ships
+changes. Tags don't. Pinning to a tag means your CI and your local runs only
+change when *you* choose to upgrade.
+
+### 14b — Pull upstream improvements when you're ready
+
+**Do (one-time):** add the canonical maintainer repo as a second remote called
+`upstream`. Your own client repo stays as `origin`.
+
+```bash
+# Replace the URL with whatever the maintainer points you to.
+git remote add upstream https://github.com/MAINTAINER/king-cro.git
+git remote -v   # confirm: origin is your repo, upstream is the maintainer's
+```
+
+**Do (every time you want to upgrade):**
+
+```bash
+git fetch upstream --tags
+# Look at what changed since your current tag
+git log --oneline v0.1.0..upstream/king
+
+# When ready, merge a specific newer tag (not the moving branch)
+git checkout king
+git merge v0.2.0      # creates a normal merge commit on your king
+git push origin king
+```
+
+**Why:** merging from a *tag* (not from `upstream/king`) gives you a defined,
+auditable change set. Merging from the branch gives you whatever happens to be
+on it right now, which is harder to roll back.
+
+### 14c — What if there's a merge conflict?
+
+The only files you should be editing locally are:
+
+- `knowledge/brand.md` — your business context
+- `knowledge/hypotheses.md` — your hunches
+- `knowledge/history.md`, `knowledge/insights.md`, `knowledge/experiments.md` —
+  auto-updated by the agent
+- `reports/**` — auto-generated weekly
+- `.env` — gitignored, won't conflict
+- GitHub Secrets — not in the repo at all
+
+If you have *not* edited code or scripts, conflicts will only ever appear in
+your knowledge-base files. Standard fix: `git checkout --ours` on those files
+(keep your version of brand.md, history.md, etc.), then re-resolve any
+upstream improvements you actually want.
+
+If you *have* edited code (you forked the script), you're on the hook for
+maintaining that fork. Try to keep all your customisation in
+`knowledge/` and `.env` so this stays painless.
+
+### 14d — Subscribe to release notifications
+
+GitHub → maintainer's repo → **Watch** → **Custom** → tick **Releases only**.
+You'll get an email when a new tagged release ships. Most weeks: nothing. Some
+weeks: a bugfix worth pulling.
+
+---
+
 ## Troubleshooting quick reference
 
 | Symptom | Likely cause | Fix |

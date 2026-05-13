@@ -6,6 +6,8 @@ findings by ICE, synthesises a report, and sends a Slack/email digest.
 
 > **First time here?** Follow [SETUP.md](SETUP.md) — a step-by-step walkthrough
 > designed for an AI agent (or you) to work through from zero to first report.
+> Once running, see [VERSIONING.md](VERSIONING.md) for how to pin to a release
+> tag and pull upstream improvements safely.
 
 ---
 
