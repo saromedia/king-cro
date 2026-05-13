@@ -40,12 +40,13 @@ def fetch_sessions_and_cvr(days: int = 30) -> dict:
     """
     start, end = _date_range(days)
 
-    # ShopifyQL query for sessions overview
+    # Pass the ShopifyQL string as a GraphQL variable rather than interpolating
+    # into the GraphQL source. The dates are internally generated ISO strings, so
+    # there's no current injection vector — but variables are the idiomatic
+    # boundary and remove the footgun if inputs ever come from elsewhere.
     query = """
-    query {
-      shopifyqlQuery(
-        query: "FROM sessions SINCE %s UNTIL %s SHOW sessions, converted_sessions, conversion_rate ORDER BY day"
-      ) {
+    query Sessions($q: String!) {
+      shopifyqlQuery(query: $q) {
         ... on TableResponse {
           tableData {
             rowData
@@ -61,13 +62,17 @@ def fetch_sessions_and_cvr(days: int = 30) -> dict:
         }
       }
     }
-    """ % (start, end)
+    """
+    variables = {
+        "q": f"FROM sessions SINCE {start} UNTIL {end} "
+             f"SHOW sessions, converted_sessions, conversion_rate ORDER BY day",
+    }
 
     try:
         resp = requests.post(
             GRAPHQL_URL,
             headers=HEADERS,
-            json={"query": query},
+            json={"query": query, "variables": variables},
             timeout=30,
         )
         resp.raise_for_status()
@@ -150,10 +155,8 @@ def fetch_device_breakdown(days: int = 30) -> dict:
     start, end = _date_range(days)
 
     query = """
-    query {
-      shopifyqlQuery(
-        query: "FROM sessions SINCE %s UNTIL %s SHOW sessions, conversion_rate GROUP BY device_type"
-      ) {
+    query DeviceBreakdown($q: String!) {
+      shopifyqlQuery(query: $q) {
         ... on TableResponse {
           tableData {
             rowData
@@ -169,13 +172,17 @@ def fetch_device_breakdown(days: int = 30) -> dict:
         }
       }
     }
-    """ % (start, end)
+    """
+    variables = {
+        "q": f"FROM sessions SINCE {start} UNTIL {end} "
+             f"SHOW sessions, conversion_rate GROUP BY device_type",
+    }
 
     try:
         resp = requests.post(
             GRAPHQL_URL,
             headers=HEADERS,
-            json={"query": query},
+            json={"query": query, "variables": variables},
             timeout=30,
         )
         resp.raise_for_status()
