@@ -87,20 +87,38 @@ def load_win_rate_calibration() -> dict:
     """
     Reads insights.md win rate table and returns a dict of type → adjustment.
     +1 for types with >60% win rate (3+ decided), -1 for <30%.
+    Uses header-based column lookup to handle schema changes.
     """
     calibration = {}
     try:
         content = INSIGHTS_PATH.read_text(encoding="utf-8")
-        for line in content.splitlines():
+        lines = content.splitlines()
+        col_map = {}
+        for line in lines:
+            if line.strip().startswith("|") and "Type" in line and "Winners" in line:
+                headers = [h.strip() for h in line.split("|")]
+                col_map = {name: idx for idx, name in enumerate(headers) if name}
+                break
+
+        if not col_map or "Type" not in col_map or "Winners" not in col_map or "Losers" not in col_map:
+            return calibration
+
+        type_idx = col_map["Type"]
+        winners_idx = col_map["Winners"]
+        losers_idx = col_map["Losers"]
+
+        for line in lines:
             if not line.strip().startswith("|") or "---" in line or "Type" in line:
                 continue
             parts = [p.strip() for p in line.split("|")]
-            if len(parts) < 8:
+            if max(type_idx, winners_idx, losers_idx) >= len(parts):
                 continue
-            exp_type = parts[1]
+            exp_type = parts[type_idx]
+            if not exp_type or exp_type.startswith("*"):
+                continue
             try:
-                winners = int(parts[4]) if parts[4].isdigit() else 0
-                losers = int(parts[5]) if parts[5].isdigit() else 0
+                winners = int(parts[winners_idx]) if parts[winners_idx].isdigit() else 0
+                losers = int(parts[losers_idx]) if parts[losers_idx].isdigit() else 0
             except (ValueError, IndexError):
                 continue
             decided = winners + losers
@@ -159,6 +177,7 @@ def score_product_findings(products: list[dict]) -> list[dict]:
                 "issue": f"Product '{p['title']}' has thin description ({p['description_word_count']} words)",
                 "suggestion": "Expand product description to at least 80 words covering materials, dimensions, use case, and care.",
                 "severity": "medium",
+                "experiment_type": "content",
             })
         if p.get("has_few_images"):
             findings.append({
@@ -167,6 +186,7 @@ def score_product_findings(products: list[dict]) -> list[dict]:
                 "issue": f"Product '{p['title']}' has only {p['image_count']} image(s)",
                 "suggestion": "Add at least 3 images: hero, lifestyle, and detail/scale shot.",
                 "severity": "medium",
+                "experiment_type": "visual",
             })
         if p.get("has_all_variants_oos"):
             findings.append({
@@ -175,6 +195,7 @@ def score_product_findings(products: list[dict]) -> list[dict]:
                 "issue": f"Product '{p['title']}' has all variants out of stock",
                 "suggestion": "Hide, redirect, or show a back-in-stock notification for this product.",
                 "severity": "high",
+                "experiment_type": "merchandising",
             })
 
     return findings
@@ -192,6 +213,7 @@ def score_metric_findings(metrics: dict) -> list[dict]:
             "issue": f"Cart abandonment rate is {cart_rate:.1%} — above 70% benchmark",
             "suggestion": "Audit checkout flow for friction. Consider abandoned cart email recovery.",
             "severity": "high",
+            "experiment_type": "ux",
         })
 
     repeat_rate = metrics.get("repeat_customer_rate")
@@ -202,6 +224,7 @@ def score_metric_findings(metrics: dict) -> list[dict]:
             "issue": f"Repeat customer rate is {repeat_rate:.1%} — below 20% benchmark",
             "suggestion": "Introduce post-purchase email flow and loyalty incentive.",
             "severity": "medium",
+            "experiment_type": "email",
         })
 
     discount_rate = metrics.get("discount_usage_rate")
@@ -212,6 +235,7 @@ def score_metric_findings(metrics: dict) -> list[dict]:
             "issue": f"Discount code usage is {discount_rate:.1%} — signals price resistance",
             "suggestion": "Review pricing strategy or shift discounts to loyalty program rather than public codes.",
             "severity": "medium",
+            "experiment_type": "pricing",
         })
 
     return findings

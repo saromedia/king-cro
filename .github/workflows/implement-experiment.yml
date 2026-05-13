@@ -94,17 +94,18 @@ jobs:
       - name: Read PR description
         id: pr_desc
         run: |
-          cd theme
-          if [ -f "cro-agent/dev-agent/handoffs/pr-description.md" ]; then
-            # First line is title, rest is body
-            TITLE=$(head -1 cro-agent/dev-agent/handoffs/pr-description.md)
-            BODY=$(tail -n +2 cro-agent/dev-agent/handoffs/pr-description.md)
+          PR_DESC="dev-agent/handoffs/pr-description.md"
+          if [ -f "$PR_DESC" ]; then
+            TITLE=$(head -1 "$PR_DESC")
+            BODY=$(tail -n +2 "$PR_DESC")
+          elif [ -f "theme/$PR_DESC" ]; then
+            TITLE=$(head -1 "theme/$PR_DESC")
+            BODY=$(tail -n +2 "theme/$PR_DESC")
           else
             TITLE="Experiment: ${{ env.BRANCH_NAME }}"
             BODY="Automated implementation from handoff spec: ${{ inputs.handoff_file }}"
           fi
           echo "pr_title=$TITLE" >> $GITHUB_OUTPUT
-          # Write body to file for multiline support
           echo "$BODY" > /tmp/pr-body.md
 
       - name: Commit, push, and create PR
@@ -112,7 +113,9 @@ jobs:
           cd theme
           git config user.name "CRO Dev Agent"
           git config user.email "cro-dev-agent@noreply.github.com"
-          git add -A
+          # Only stage theme directories — exclude CRO agent files
+          git add assets/ config/ layout/ locales/ sections/ snippets/ templates/ 2>/dev/null || true
+          git diff --cached --quiet && echo "No theme changes to commit" && exit 1
           git commit -m "Implement ${{ env.BRANCH_NAME }}"
           git push origin ${{ env.BRANCH_NAME }}
           gh pr create \

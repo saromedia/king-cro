@@ -345,23 +345,31 @@ def update_experiments_log(experiment_id: str, status: str, lift: str,
     match = pattern.search(content)
 
     if match:
-        # Update the status, end date, lift, confidence in the existing row
-        old_line = None
+        # Build column index map from header row
+        col_map = {}
+        lines = content.splitlines()
+        for line in lines:
+            if line.strip().startswith("|") and "ID" in line and "Status" in line:
+                headers = [h.strip() for h in line.split("|")]
+                col_map = {name: idx for idx, name in enumerate(headers) if name}
+                break
+
         new_lines = []
-        for line in content.splitlines():
-            # Only match rows where the experiment ID is in the ID column (first cell)
+        for line in lines:
             cells = [p.strip() for p in line.split("|")] if line.strip().startswith("|") else []
             if cells and len(cells) >= 2 and cells[1] == experiment_id:
-                old_line = line
-                parts = cells
-                # Expected: empty, ID, Scope, Type, Zone, TestMode, Experiment, Hypothesis, ICE, Status, Start, End, Lift, Confidence, Tool, Notes, empty
-                if len(parts) >= 16:
-                    parts[9] = f" {status} "
-                    parts[11] = f" {end_date} "
-                    parts[12] = f" {lift} "
-                    parts[13] = f" {confidence} "
-                    if notes:
-                        parts[15] = f" {notes} "
+                parts = [p for p in line.split("|")]
+                if col_map:
+                    if "Status" in col_map and col_map["Status"] < len(parts):
+                        parts[col_map["Status"]] = f" {status} "
+                    if "End" in col_map and col_map["End"] < len(parts):
+                        parts[col_map["End"]] = f" {end_date} "
+                    if "Lift" in col_map and col_map["Lift"] < len(parts):
+                        parts[col_map["Lift"]] = f" {lift} "
+                    if "Confidence" in col_map and col_map["Confidence"] < len(parts):
+                        parts[col_map["Confidence"]] = f" {confidence} "
+                    if notes and "Notes" in col_map and col_map["Notes"] < len(parts):
+                        parts[col_map["Notes"]] = f" {notes} "
                     new_lines.append("|".join(parts))
                 else:
                     new_lines.append(line)
